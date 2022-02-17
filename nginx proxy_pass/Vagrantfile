@@ -7,7 +7,7 @@ Vagrant.configure("2") do |config|
   systemctl enable --now nginx.service 
   mkdir -p /etc/ssl
   openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/privateKey.key -out /etc/ssl/certificate.crt -subj "/C=US/ST=TEST/L=TEST/O=TEST/CN=www.example.com"
-	SHELL
+  SHELL
   
 
   config.vm.define "proxy" do |proxy|
