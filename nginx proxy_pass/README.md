@@ -4,6 +4,11 @@ nginx proxy_pass <br>
 80 -> 443<br>
 443 -> 443<br>
 
+<br>
+В vagrant файле нужно заменять ip на свои.
+<br>
+<br>
+
 web
 <pre>
 user nginx;
