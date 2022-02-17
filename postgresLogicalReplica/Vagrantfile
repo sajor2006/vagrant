@@ -1,0 +1,42 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "boxomatic/debian-10"
+
+  config.vm.provision "shell", inline: <<-SHELL
+    apt update
+    apt install -y postgresql bash-completion
+    cp -vr /etc/postgresql/11/main /etc/postgresql/11/slave
+    cp -vr /var/lib/postgresql/11/main /var/lib/postgresql/11/slave
+    chown -R  postgres. /var/lib/postgresql /etc/postgresql
+    sed -i  -e 's/main/slave/g' -e 's/port = 5432/port = 5433/g' /etc/postgresql/11/slave/postgresql.conf
+    systemctl enable postgresql@11-slave.service
+    systemctl enable postgresql@11-main.service
+    systemctl restart postgresql@11-main.service
+    systemctl restart postgresql@11-slave.service
+    cd /var/lib/postgresql
+    sudo -u postgres psql -c "ALTER ROLE postgres PASSWORD 'qq'"
+    sed -i '/# configuration parameter, or via the -i or -h command line switches./a host    replication    postgres    0.0.0.0/0    md5' /etc/postgresql/11/main/pg_hba.conf
+    sed -i -e  '/wal_level/s/^#//g' -e '/wal_level/s/= replica/= logical/g' /etc/postgresql/11/main/postgresql.conf
+    systemctl restart postgresql@11-main.service
+
+    for db in {1,2,3} 
+    do 
+      sudo -u postgres createdb testdb$db
+      sudo -u postgres createdb --port=5433 testdb$db
+      for t in {1,2,3,4,5,6,7,8,9,10}
+      do 
+        sudo -u postgres psql -d testdb$db -c  "create table t$t (row1 varchar(255), row2 varchar(255), row3 varchar(255));" 2>/dev/null
+        sudo -u postgres psql --port=5433 -d testdb$db -c  "create table t$t (row1 varchar(255), row2 varchar(255), row3 varchar(255));" 2>/dev/null
+
+        [ "$db" == "1" ] && ! [[ $(($t % 2)) -eq 0 ]] && tt="$tt$([ "$tt" != "" ] && echo ,) t$t"
+        [ "$db" == "3" ] && [[ $(($t % 2)) -eq 0 ]] && tt="$tt$([ "$tt" != "" ] && echo ,) t$t"
+
+        done
+        [ "$db" != "2" ] &&  sudo -u postgres psql -d testdb$db -c "CREATE PUBLICATION mypub FOR TABLE $tt;"
+        [ "$db" != "2" ] &&  sudo -u postgres psql --port 5433 -d testdb$db -c "CREATE SUBSCRIPTION mysub$db CONNECTION 'dbname=testdb$db host=127.0.0.1 user=postgres password=qq' PUBLICATION mypub;"
+        tt=''
+    done
+        #[ "$db" == "1" ] && ! [[ $(($t % 2)) -eq 0 ]] && sudo -u postgres psql -d testdb$db -c "CREATE PUBLICATION mypub FOR TABLE t$t;"
+        #sudo -u postgres psql -d testdb1 -c "insert into t3 values(20, 25, 44); "
+        #sudo -u postgres psql --port=5433 -d testdb1 -c "select * from t2  "
+	SHELL
+end
